@@ -1,62 +1,23 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { createNativeStackNavigator, NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeScreen from '../screens/HomeScreen';
 import MovieDetailsScreen from '../screens/MovieDetailsScreen';
 import SearchScreen from '../screens/SearchScreen';
 import UserReviewScreen from '../screens/UserReviewScreen';
 
-export type RootStackParamList = {
-  Home: undefined;
-  MovieDetails: { movieId: number };
-  PostReview: { movieId: number; movieTitle: string };
+type Route =
+  | { name: 'Home' }
+  | { name: 'MovieDetails'; movieId: number }
+  | { name: 'PostReview'; movieId: number; movieTitle: string };
+
+type HomeTabsProps = {
+  activeTab: 'popular' | 'search';
+  openMovie: (movieId: number) => void;
+  onTabPress: (tab: 'popular' | 'search') => void;
 };
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
-
-type HomeNavigation = NativeStackNavigationProp<RootStackParamList, 'Home'>;
-
-const HomeTabs = () => {
-  const navigation = useNavigation<HomeNavigation>();
-  const [activeTab, setActiveTab] = useState<'popular' | 'search'>('popular');
-  const [tabHistory, setTabHistory] = useState<Array<'popular' | 'search'>>([]);
-
-  const onTabPress = useCallback((tab: 'popular' | 'search') => {
-    setActiveTab(current => {
-      if (current === tab) {
-        return current;
-      }
-
-      setTabHistory(history => [...history, current]);
-      return tab;
-    });
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        if (tabHistory.length === 0) {
-          return false;
-        }
-
-        const previousTab = tabHistory[tabHistory.length - 1];
-        setTabHistory(current => current.slice(0, -1));
-        setActiveTab(previousTab);
-        return true;
-      });
-
-      return () => subscription.remove();
-    }, [tabHistory]),
-  );
-
-  const openMovie = useCallback(
-    (movieId: number) => {
-      navigation.navigate('MovieDetails', { movieId });
-    },
-    [navigation],
-  );
-
+const HomeTabs = ({ activeTab, onTabPress, openMovie }: HomeTabsProps) => {
   return (
     <View style={styles.container}>
       <View style={styles.content}>{activeTab === 'popular' ? <HomeScreen onMoviePress={openMovie} /> : <SearchScreen onMoviePress={openMovie} />}</View>
@@ -73,23 +34,22 @@ const HomeTabs = () => {
   );
 };
 
-const HomeRoute = () => <HomeTabs />;
-
-const MovieDetailsRoute = ({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'MovieDetails'>) => {
-  return (
-    <MovieDetailsScreen
-      movieId={route.params.movieId}
-      onWriteReview={(movieId, movieTitle) => navigation.navigate('PostReview', { movieId, movieTitle })}
-    />
-  );
-};
-
-const PostReviewRoute = ({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'PostReview'>) => {
-  return <UserReviewScreen movieId={route.params.movieId} movieTitle={route.params.movieTitle} onDone={() => navigation.goBack()} />;
-};
-
 const AppNavigator = () => {
+  const insets = useSafeAreaInsets();
+  const [history, setHistory] = useState<Route[]>([{ name: 'Home' }]);
   const [networkVisible, setNetworkVisible] = useState(false);
+  const [tabHistory, setTabHistory] = useState<Array<'popular' | 'search'>>([]);
+  const [activeTab, setActiveTab] = useState<'popular' | 'search'>('popular');
+  const [tabHistory, setTabHistory] = useState<Array<'popular' | 'search'>>([]);
+
+  const backLockRef = useRef(false);
+  const currentRoute = history[history.length - 1];
+
+  const releaseBackLock = () => {
+    requestAnimationFrame(() => {
+      backLockRef.current = false;
+    });
+  };
 
   useEffect(() => {
     const handler = () => setNetworkVisible(true);
@@ -103,20 +63,89 @@ const AppNavigator = () => {
     };
   }, []);
 
+  const goBack = useCallback(() => {
+    setHistory(current => {
+      if (current.length <= 1) {
+        return current;
+      }
+      return current.slice(0, -1);
+    });
+  }, []);
+
+  const handleTabPress = useCallback((tab: 'popular' | 'search') => {
+    setActiveTab(current => {
+      if (current === tab) {
+        return current;
+      }
+
+      setTabHistory(existing => [...existing, current]);
+      return tab;
+    });
+  }, []);
+
+  const handleHardwareBack = useCallback(() => {
+    if (backLockRef.current) {
+      return true;
+    }
+
+    backLockRef.current = true;
+
+    if (currentRoute.name !== 'Home') {
+      goBack();
+      releaseBackLock();
+      return true;
+    }
+
+    if (tabHistory.length > 0) {
+      const previousTab = tabHistory[tabHistory.length - 1];
+      setTabHistory(current => current.slice(0, -1));
+      setActiveTab(previousTab);
+      releaseBackLock();
+      return true;
+    }
+
+    releaseBackLock();
+    return false;
+  }, [currentRoute.name, goBack, tabHistory]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleHardwareBack);
+    return () => subscription.remove();
+  }, [handleHardwareBack]);
+
+  const openMovie = (movieId: number) => {
+    setHistory(current => [...current, { name: 'MovieDetails', movieId }]);
+  };
+
+const AppNavigator = () => {
+  const [networkVisible, setNetworkVisible] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setNetworkVisible(true);
+    networkHandlers.push(handler);
+
   return (
-    <View style={styles.root}>
-      <Stack.Navigator
-        initialRouteName="Home"
-        screenOptions={{
-          headerStyle: { backgroundColor: '#020617' },
-          headerTintColor: '#93c5fd',
-          headerTitleStyle: { color: '#f8fafc', fontWeight: '700' },
-          contentStyle: { backgroundColor: '#0f172a' },
-        }}>
-        <Stack.Screen name="Home" component={HomeRoute} options={{ title: 'Movie Discovery', headerBackVisible: false }} />
-        <Stack.Screen name="MovieDetails" component={MovieDetailsRoute} options={{ title: 'Movie details' }} />
-        <Stack.Screen name="PostReview" component={PostReviewRoute} options={{ title: 'Write review' }} />
-      </Stack.Navigator>
+    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}> 
+      {currentRoute.name !== 'Home' ? (
+        <View style={styles.header}>
+          <Pressable onPress={goBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Back</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>{headerTitle}</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+      ) : null}
+
+      <View style={styles.content}>
+        {currentRoute.name === 'Home' && <HomeTabs onTabPress={handleTabPress} activeTab={activeTab} openMovie={openMovie} />}
+
+        {currentRoute.name === 'MovieDetails' && <MovieDetailsScreen movieId={currentRoute.movieId} onWriteReview={openPostReview} />}
+
+        {currentRoute.name === 'PostReview' && (
+          <UserReviewScreen movieId={currentRoute.movieId} movieTitle={currentRoute.movieTitle} onDone={goBack} />
+        )}
+      </View>
+
       <NetworkPopover visible={networkVisible} onClose={() => setNetworkVisible(false)} />
     </View>
   );
