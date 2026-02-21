@@ -22,12 +22,11 @@ const HomeTabs = ({ openMovie,onTabPress,activeTab }: HomeTabsProps) => {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <View style={{ flex: 1, display: activeTab === 'popular' ? 'flex' : 'none' }}>
+        {activeTab === 'popular' ? (
           <HomeScreen onMoviePress={openMovie} />
-        </View>
-        <View style={{ flex: 1, display: activeTab === 'search' ? 'flex' : 'none' }}>
+        ) : (
           <SearchScreen onMoviePress={openMovie} />
-        </View>
+        )}
       </View>
 
 
@@ -112,15 +111,10 @@ const [tabHistory, setTabHistory] = useState<Array<'popular' | 'search'>>([]);
 
   
   useEffect(() => {
-
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleHardwareBack);
 
     return () => subscription.remove();
   }, [handleHardwareBack]);
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', handleHardwareBack);
-  },[])
   
   const openMovie = (movieId: number) => {
     setHistory(current => [...current, { name: 'MovieDetails', movieId }]);

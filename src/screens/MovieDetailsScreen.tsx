@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Image,
   Pressable,
   ScrollView,
@@ -120,12 +119,9 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
 
 
         <Text style={styles.sectionTitle}>Cast</Text>
-        <FlatList
-          horizontal
-          data={cast}
-          keyExtractor={item => `${item.id}-${item.character}`}
-          renderItem={({ item }) => (
-            <View style={styles.castCard}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {cast.map(item => (
+            <View key={`${item.id}-${item.character}`} style={styles.castCard}>
               <Image
                 source={
                   item.profile_path
@@ -141,9 +137,8 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
                 {item.character}
               </Text>
             </View>
-          )}
-          showsHorizontalScrollIndicator={false}
-        />
+          ))}
+        </ScrollView>
 
         <Text style={styles.sectionTitle}>Reviews</Text>
         <Pressable
