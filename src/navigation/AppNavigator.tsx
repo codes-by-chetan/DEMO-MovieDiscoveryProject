@@ -40,6 +40,7 @@ const AppNavigator = () => {
   const [networkVisible, setNetworkVisible] = useState(false);
   const [tabHistory, setTabHistory] = useState<Array<'popular' | 'search'>>([]);
   const [activeTab, setActiveTab] = useState<'popular' | 'search'>('popular');
+  const [tabHistory, setTabHistory] = useState<Array<'popular' | 'search'>>([]);
 
   const backLockRef = useRef(false);
   const currentRoute = history[history.length - 1];
@@ -116,19 +117,12 @@ const AppNavigator = () => {
     setHistory(current => [...current, { name: 'MovieDetails', movieId }]);
   };
 
-  const openPostReview = (movieId: number, movieTitle: string) => {
-    setHistory(current => [...current, { name: 'PostReview', movieId, movieTitle }]);
-  };
+const AppNavigator = () => {
+  const [networkVisible, setNetworkVisible] = useState(false);
 
-  const headerTitle = useMemo(() => {
-    if (currentRoute.name === 'MovieDetails') {
-      return 'Movie details';
-    }
-    if (currentRoute.name === 'PostReview') {
-      return 'Write review';
-    }
-    return 'Movie Discovery';
-  }, [currentRoute.name]);
+  useEffect(() => {
+    const handler = () => setNetworkVisible(true);
+    networkHandlers.push(handler);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}> 
@@ -191,32 +185,6 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#020617',
-    borderBottomWidth: 1,
-    borderColor: '#1e293b',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  backButton: {
-    paddingVertical: 4,
-    paddingRight: 10,
-  },
-  backButtonText: {
-    color: '#93c5fd',
-    fontWeight: '700',
-  },
-  headerTitle: {
-    color: '#f8fafc',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  headerSpacer: {
-    width: 36,
   },
   content: {
     flex: 1,
