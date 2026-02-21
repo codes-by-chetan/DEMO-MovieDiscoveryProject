@@ -5,7 +5,6 @@
  * @format
  */
 
-import { NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   SafeAreaProvider,
@@ -17,9 +16,7 @@ function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <NavigationContainer>
-          <AppNavigator />
-        </NavigationContainer>
+        <AppNavigator />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
