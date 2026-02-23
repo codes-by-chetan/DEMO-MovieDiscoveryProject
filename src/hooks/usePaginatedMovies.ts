@@ -1,7 +1,7 @@
-import {useCallback, useRef, useState} from 'react';
+import {useCallback, useRef, useState, useEffect} from 'react';
 import {Movie} from '../types/movie';
 
-export type MovieFetcher = (page: number) => Promise<{
+export type MovieFetcher = (page: number, signal?: AbortSignal) => Promise<{
   page: number;
   results: Movie[];
   total_pages: number;
@@ -26,9 +26,20 @@ export const usePaginatedMovies = (fetcher: MovieFetcher) => {
 
   const loadingRef = useRef(false);
   const fetchedPagesRef = useRef(new Set<number>());
+  const mountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const loadPage = useCallback(
-    
     async (nextPage: number, mode: 'initial' | 'refresh' | 'append') => {
       if (loadingRef.current || fetchedPagesRef.current.has(nextPage)) {
         return;
@@ -45,7 +56,15 @@ export const usePaginatedMovies = (fetcher: MovieFetcher) => {
 
       try {
         setError(null);
-        const response = await fetcher(nextPage);        
+        
+        // Create abort controller for this request
+        abortControllerRef.current = new AbortController();
+        const response = await fetcher(nextPage, abortControllerRef.current.signal);
+
+        // Don't update state if component unmounted
+        if (!mountedRef.current) {
+          return;
+        }        
 
         setPage(response.page);
         setTotalPages(response.total_pages);
@@ -56,11 +75,24 @@ export const usePaginatedMovies = (fetcher: MovieFetcher) => {
             : mergeUniqueById([], response.results),
         );
       } catch (caughtError) {
+        // Don't update state if component unmounted
+        if (!mountedRef.current) {
+          return;
+        }
+
+        // Skip error state if request was cancelled
+        if (caughtError instanceof Error && caughtError.message.includes('aborted')) {
+          console.log('[usePaginatedMovies] Request cancelled');
+          return;
+        }
         
         const message = caughtError instanceof Error ? caughtError.message : 'Unable to fetch movies right now. Please try again.';
-
         setError(message);
       } finally {
+        if (!mountedRef.current) {
+          return;
+        }
+
         loadingRef.current = false;
         setInitialLoading(false);
         setRefreshing(false);
@@ -98,8 +130,8 @@ export const usePaginatedMovies = (fetcher: MovieFetcher) => {
     loadingMore,
     refreshing,
     error,
-    resetAndLoad,
-    refresh,
     loadNext,
+    refresh,
+    resetAndLoad,
   };
 };

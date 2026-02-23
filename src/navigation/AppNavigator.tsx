@@ -63,33 +63,47 @@ const AppNavigator = () => {
   }, []);
 
   const goBack = useCallback(() => {
+    console.log('[Navigation] goBack called, current route:', currentRoute.name);
     setHistory(current => {
       if (current.length <= 1) {
+        console.log('[Navigation] Already at root, cannot go back');
         return current;
       }
-      return current.slice(0, -1);
+      const newHistory = current.slice(0, -1);
+      console.log('[Navigation] Going back to:', newHistory[newHistory.length - 1].name);
+      return newHistory;
     });
-  }, []);
+  }, [currentRoute]);
 
   const handleTabPress = useCallback((tab: 'popular' | 'search') => {
+    console.log('[Navigation] Tab pressed:', tab);
     setActiveTab(current => {
       if (current === tab) {
+        console.log('[Navigation] Already on tab:', tab);
         return current;
       }
 
-      setTabHistory(existing => [...existing, current]);
+      setTabHistory(existing => {
+        const newHistory = [...existing, current];
+        console.log('[Navigation] Pushing previous tab to history:', newHistory);
+        return newHistory;
+      });
       return tab;
     });
   }, []);
 
   const handleHardwareBack = useCallback(() => {
+    console.log('[Navigation] Hardware back pressed, currentRoute:', currentRoute.name);
+    
     if (backLockRef.current) {
+      console.log('[Navigation] Back lock is active, ignoring');
       return true;
     }
 
     backLockRef.current = true;
 
     if (currentRoute.name !== 'Home') {
+      console.log('[Navigation] Not on Home, going back');
       goBack();
       releaseBackLock();
       return true;
@@ -97,12 +111,14 @@ const AppNavigator = () => {
 
     if (tabHistory.length > 0) {
       const previousTab = tabHistory[tabHistory.length - 1];
+      console.log('[Navigation] Restoring previous tab:', previousTab);
       setTabHistory(current => current.slice(0, -1));
       setActiveTab(previousTab);
       releaseBackLock();
       return true;
     }
 
+    console.log('[Navigation] Exiting app');
     releaseBackLock();
     return false;
   }, [currentRoute.name, goBack, tabHistory]);

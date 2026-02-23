@@ -10,20 +10,19 @@ import {
   SafeAreaProvider,
 } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 function App() {
-
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AppNavigator />
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <AppNavigator />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
 
-
-
-
-
 export default App;
+

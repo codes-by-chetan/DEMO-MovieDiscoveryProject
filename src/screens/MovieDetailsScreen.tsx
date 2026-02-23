@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -26,6 +26,9 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
   const [loading, setLoading] = useState(true);
   const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const detailsAbortRef = useRef<AbortController | null>(null);
+  const reviewsAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -34,7 +37,8 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
       try {
         setLoading(true);
         setError(null);
-        const bundle = await fetchMovieDetailsBundle(movieId, 1);
+        detailsAbortRef.current = new AbortController();
+        const bundle = await fetchMovieDetailsBundle(movieId, 1, detailsAbortRef.current.signal);
 
         if (!mounted) {
           return;
@@ -47,6 +51,11 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
         setReviewTotalPages(bundle.reviews.total_pages);
       } catch (caughtError) {
         if (mounted) {
+          // Skip error state if request was cancelled
+          if (caughtError instanceof Error && caughtError.message.includes('aborted')) {
+            console.log('[MovieDetailsScreen] Request cancelled');
+            return;
+          }
           const message = caughtError instanceof Error ? caughtError.message : 'Failed to load movie details.';
           setError(message);
         }
@@ -61,6 +70,9 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
 
     return () => {
       mounted = false;
+      if (detailsAbortRef.current) {
+        detailsAbortRef.current.abort();
+      }
     };
   }, [movieId]);
 
@@ -71,11 +83,17 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
 
     try {
       setLoadingMoreReviews(true);
-      const response = await fetchMovieReviews(movieId, reviewsPage + 1);
+      reviewsAbortRef.current = new AbortController();
+      const response = await fetchMovieReviews(movieId, reviewsPage + 1, reviewsAbortRef.current.signal);
       setReviews(current => [...current, ...response.results]);
       setReviewsPage(response.page);
       setReviewTotalPages(response.total_pages);
     } catch (caughtError) {
+      // Skip error if request was cancelled
+      if (caughtError instanceof Error && caughtError.message.includes('aborted')) {
+        console.log('[MovieDetailsScreen] Reviews request cancelled');
+        return;
+      }
       const message = caughtError instanceof Error ? caughtError.message : 'Unable to load more reviews.';
       setError(message);
     } finally {

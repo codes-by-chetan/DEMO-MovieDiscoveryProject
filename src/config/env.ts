@@ -11,9 +11,14 @@ export const env = {
 };
 
 export const validateEnv = () => {
-  console.log('hello',TMDB_API_KEY)
+  console.log('[ENV] TMDB_API_KEY:', TMDB_API_KEY ? 'SET' : 'MISSING');
+  console.log('[ENV] TMDB_LANGUAGE:', TMDB_LANGUAGE || 'MISSING');
+  console.log('[ENV] TMDB_REGION:', TMDB_REGION || 'MISSING');
+  
   if (!TMDB_API_KEY) {
-    return 'TMDB_API_KEY is missing. Add it to your .env file.';
+    const errorMsg = 'TMDB_API_KEY is missing. Add it to your .env file and rebuild.';
+    console.error('[ENV]', errorMsg);
+    return errorMsg;
   }
   return null;
 };

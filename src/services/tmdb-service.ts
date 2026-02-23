@@ -14,18 +14,23 @@ const tmdbClient = axios.create({
 });
 
 const assertApiKey = () => {
+  console.log('[TMDB] assertApiKey called');
   const validationError = validateEnv();
   if (validationError) {
+    console.error('[TMDB]', validationError);
     throw new Error(validationError);
   }
 };
 
-const withAuth = <T extends Record<string, unknown>>(params?: T) => ({
-  api_key: env.tmdbApiKey,
-  language: env.language || DEFAULT_LANGUAGE,
-  region: env.region || DEFAULT_REGION,
-  ...params,
-});
+const withAuth = <T extends Record<string, unknown>>(params?: T) => {
+  console.log('[TMDB] Adding auth parameters');
+  return {
+    api_key: env.tmdbApiKey,
+    language: env.language || DEFAULT_LANGUAGE,
+    region: env.region || DEFAULT_REGION,
+    ...params,
+  };
+};
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(() => resolve(undefined), ms));
 
@@ -44,6 +49,12 @@ const isRetriableError = (error: unknown) => {
 const getReadableError = (error: unknown) => {
   if (!axios.isAxiosError(error)) {
     return 'Unexpected error while contacting TMDB.';
+  }
+
+  // Check if request was cancelled
+  if (error.code === 'CANCELLED' || error.message?.includes('aborted')) {
+    console.log('[TMDB] Request cancelled (component unmounted)');
+    return null; // Return null for cancelled requests
   }
 
   if (error.code === 'ECONNABORTED') {
@@ -80,8 +91,15 @@ const requestWithRetry = async <T>(
       const response = await request();
       return response.data;
     } catch (error) {
+      const errorMessage = getReadableError(error);
+      
+      // If request was cancelled, don't retry - just return without error
+      if (errorMessage === null) {
+        throw new Error('Request cancelled');
+      }
+      
       if (attempt === retries || !isRetriableError(error)) {
-        throw new Error(getReadableError(error));
+        throw new Error(errorMessage);
       }
       await wait(400 * (attempt + 1));
       attempt += 1;
@@ -94,16 +112,17 @@ const requestWithRetry = async <T>(
 export const imageUrl = (path: string | null) =>
   path ? `${TMDB_IMAGE_BASE_URL}${path}` : undefined;
 
-export const fetchPopularMovies = async (page: number) => {
+export const fetchPopularMovies = async (page: number, signal?: AbortSignal) => {
   assertApiKey();
   return requestWithRetry(() =>
     tmdbClient.get<PagedResponse<Movie>>('/movie/popular', {
       params: withAuth({ page }),
+      signal,
     }),
   );
 };
 
-export const searchMovies = async (query: string, page: number) => {
+export const searchMovies = async (query: string, page: number, signal?: AbortSignal) => {
   assertApiKey();
 
   return requestWithRetry(() =>
@@ -113,6 +132,7 @@ export const searchMovies = async (query: string, page: number) => {
         page,
         include_adult: false,
       }),
+      signal,
     }),
 
   );
@@ -121,6 +141,7 @@ export const searchMovies = async (query: string, page: number) => {
 export const fetchMovieDetailsBundle = async (
   movieId: number,
   reviewPage: number,
+  signal?: AbortSignal,
 ): Promise<{
   details: MovieDetails;
   cast: CastMember[];
@@ -131,12 +152,15 @@ export const fetchMovieDetailsBundle = async (
     const [detailsResponse, creditsResponse, reviewsResponse] = await Promise.all([
       tmdbClient.get<MovieDetails>(`/movie/${movieId}`, {
         params: withAuth(),
+        signal,
       }),
       tmdbClient.get<{ cast: CastMember[] }>(`/movie/${movieId}/credits`, {
         params: withAuth(),
+        signal,
       }),
       tmdbClient.get<PagedResponse<Review>>(`/movie/${movieId}/reviews`, {
         params: withAuth({ page: reviewPage }),
+        signal,
       }),
     ]);
 
@@ -150,12 +174,12 @@ export const fetchMovieDetailsBundle = async (
   });
 };
 
-export const fetchMovieReviews = async (movieId: number, page: number) => {
+export const fetchMovieReviews = async (movieId: number, page: number, signal?: AbortSignal) => {
   assertApiKey();
   return requestWithRetry(() =>
     tmdbClient.get<PagedResponse<Review>>(`/movie/${movieId}/reviews`, {
       params: withAuth({ page }),
-
+      signal,
     }),
   );
 };

@@ -26,8 +26,12 @@ const PopularMoviesScreen = ({onMoviePress}: Props) => {
     resetAndLoad,
   } = usePaginatedMovies(fetchPopularMovies);
 
-  useEffect(() => {    
+  useEffect(() => {
+    console.log('[HomeScreen] Mounting, calling resetAndLoad');
     resetAndLoad();
+    return () => {
+      console.log('[HomeScreen] Unmounting');
+    };
   }, [resetAndLoad]);
 
   const onEndReached = useCallback(() => {
