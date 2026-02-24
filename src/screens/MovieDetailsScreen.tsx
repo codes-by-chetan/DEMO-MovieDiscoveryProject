@@ -9,7 +9,11 @@ import {
   View,
 } from 'react-native';
 import { CastMember, MovieDetails, Review } from '../types/movie';
-import { fetchMovieDetailsBundle, fetchMovieReviews, imageUrl } from '../services/tmdb-service';
+import {
+  fetchMovieDetailsBundle,
+  fetchMovieReviews,
+  imageUrl,
+} from '../services/tmdb-service';
 import ReviewItem from '../components/ReviewItem';
 
 type Props = {
@@ -26,11 +30,26 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
   const [loading, setLoading] = useState(true);
   const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const detailsAbortRef = useRef<AbortController | null>(null);
   const reviewsAbortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      // Abort any pending requests
+      if (detailsAbortRef.current) {
+        detailsAbortRef.current.abort();
+      }
+      if (reviewsAbortRef.current) {
+        reviewsAbortRef.current.abort();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
     let mounted = true;
 
     const load = async () => {
@@ -38,9 +57,13 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
         setLoading(true);
         setError(null);
         detailsAbortRef.current = new AbortController();
-        const bundle = await fetchMovieDetailsBundle(movieId, 1, detailsAbortRef.current.signal);
+        const bundle = await fetchMovieDetailsBundle(
+          movieId,
+          1,
+          detailsAbortRef.current.signal,
+        );
 
-        if (!mounted) {
+        if (!mounted || !mountedRef.current) {
           return;
         }
 
@@ -50,17 +73,24 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
         setReviewsPage(bundle.reviews.page);
         setReviewTotalPages(bundle.reviews.total_pages);
       } catch (caughtError) {
-        if (mounted) {
+        if (mounted && mountedRef.current) {
           // Skip error state if request was cancelled
-          if (caughtError instanceof Error && caughtError.message.includes('aborted')) {
+          if (
+            caughtError instanceof Error &&
+            (caughtError.message.includes('aborted') ||
+              detailsAbortRef.current?.signal.aborted)
+          ) {
             console.log('[MovieDetailsScreen] Request cancelled');
             return;
           }
-          const message = caughtError instanceof Error ? caughtError.message : 'Failed to load movie details.';
+          const message =
+            caughtError instanceof Error
+              ? caughtError.message
+              : 'Failed to load movie details.';
           setError(message);
         }
       } finally {
-        if (mounted) {
+        if (mounted && mountedRef.current) {
           setLoading(false);
         }
       }
@@ -84,20 +114,45 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
     try {
       setLoadingMoreReviews(true);
       reviewsAbortRef.current = new AbortController();
-      const response = await fetchMovieReviews(movieId, reviewsPage + 1, reviewsAbortRef.current.signal);
+      const response = await fetchMovieReviews(
+        movieId,
+        reviewsPage + 1,
+        reviewsAbortRef.current.signal,
+      );
+
+      // Check mounted before updating state
+      if (!mountedRef.current) {
+        return;
+      }
+
       setReviews(current => [...current, ...response.results]);
       setReviewsPage(response.page);
       setReviewTotalPages(response.total_pages);
     } catch (caughtError) {
+      // Don't update state if component unmounted
+      if (!mountedRef.current) {
+        return;
+      }
+
       // Skip error if request was cancelled
-      if (caughtError instanceof Error && caughtError.message.includes('aborted')) {
+      if (
+        caughtError instanceof Error &&
+        (caughtError.message.includes('aborted') ||
+          reviewsAbortRef.current?.signal.aborted)
+      ) {
         console.log('[MovieDetailsScreen] Reviews request cancelled');
         return;
       }
-      const message = caughtError instanceof Error ? caughtError.message : 'Unable to load more reviews.';
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : 'Unable to load more reviews.';
       setError(message);
     } finally {
-      setLoadingMoreReviews(false);
+      // Only update state if component is still mounted
+      if (mountedRef.current) {
+        setLoadingMoreReviews(false);
+      }
     }
   }, [loadingMoreReviews, movieId, reviewTotalPages, reviewsPage]);
 
@@ -121,20 +176,26 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Image
-          source={details.backdrop_path ? { uri: imageUrl(details.backdrop_path) } : undefined}
+          source={
+            details.backdrop_path
+              ? { uri: imageUrl(details.backdrop_path) }
+              : undefined
+          }
           style={styles.backdrop}
         />
         <Text style={styles.title}>{details.title}</Text>
         <Text style={styles.meta}>
           {details.release_date} • {details.runtime ?? 'N/A'} min
         </Text>
-        <Text style={styles.meta}>Genres: {details.genres.map(g => g.name).join(', ')}</Text>
+        <Text style={styles.meta}>
+          Genres: {details.genres.map(g => g.name).join(', ')}
+        </Text>
         <Text style={styles.meta}>
           Rating: {details.vote_average.toFixed(1)} ({details.vote_count} votes)
         </Text>
-        <Text style={styles.overview}>{details.overview || 'No overview available.'}</Text>
-
-
+        <Text style={styles.overview}>
+          {details.overview || 'No overview available.'}
+        </Text>
 
         <Text style={styles.sectionTitle}>Cast</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -161,13 +222,19 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
         <Text style={styles.sectionTitle}>Reviews</Text>
         <Pressable
           style={styles.button}
-          onPress={() => onWriteReview(details.id, details.title)}>
+          onPress={() => onWriteReview(details.id, details.title)}
+        >
           <Text style={styles.buttonText}>Post a review</Text>
         </Pressable>
         {reviews.length === 0 ? (
           <Text style={styles.meta}>No reviews yet.</Text>
         ) : (
-          reviews.map(review => <ReviewItem key={`${review.id}-${review.created_at}`} review={review} />)
+          reviews.map(review => (
+            <ReviewItem
+              key={`${review.id}-${review.created_at}`}
+              review={review}
+            />
+          ))
         )}
 
         {reviewsPage < reviewTotalPages ? (
@@ -241,7 +308,7 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 12,
   },
-  
+
   button: {
     marginTop: 8,
     backgroundColor: '#2563eb',

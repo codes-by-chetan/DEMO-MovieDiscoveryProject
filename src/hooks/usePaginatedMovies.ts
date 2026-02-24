@@ -1,7 +1,10 @@
-import {useCallback, useRef, useState, useEffect} from 'react';
-import {Movie} from '../types/movie';
+import { useCallback, useRef, useState, useEffect } from 'react';
+import { Movie } from '../types/movie';
 
-export type MovieFetcher = (page: number, signal?: AbortSignal) => Promise<{
+export type MovieFetcher = (
+  page: number,
+  signal?: AbortSignal,
+) => Promise<{
   page: number;
   results: Movie[];
   total_pages: number;
@@ -28,13 +31,27 @@ export const usePaginatedMovies = (fetcher: MovieFetcher) => {
   const fetchedPagesRef = useRef(new Set<number>());
   const mountedRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pendingRequestsRef = useRef<Set<AbortController>>(new Set());
 
-  // Cleanup on unmount
+  // Cleanup on unmount - abort ALL pending requests
   useEffect(() => {
     return () => {
       mountedRef.current = false;
+      // Cancel all pending requests
+      pendingRequestsRef.current.forEach(controller => {
+        try {
+          controller.abort();
+        } catch (e:any) {
+          // Silently ignore if already aborted
+        }
+      });
+      pendingRequestsRef.current.clear();
       if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+        try {
+          abortControllerRef.current.abort();
+        } catch (e:any) {
+          // Silently ignore if already aborted
+        }
       }
     };
   }, []);
@@ -54,17 +71,23 @@ export const usePaginatedMovies = (fetcher: MovieFetcher) => {
         setLoadingMore(true);
       }
 
+      // Create and track abort controller for this request
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      pendingRequestsRef.current.add(controller);
+
       try {
         setError(null);
-        
-        // Create abort controller for this request
-        abortControllerRef.current = new AbortController();
-        const response = await fetcher(nextPage, abortControllerRef.current.signal);
 
-        // Don't update state if component unmounted
-        if (!mountedRef.current) {
+        const response = await fetcher(nextPage, controller.signal);
+
+        // Remove from pending set
+        pendingRequestsRef.current.delete(controller);
+
+        // Don't update state if component unmounted or request was aborted
+        if (!mountedRef.current || controller.signal.aborted) {
           return;
-        }        
+        }
 
         setPage(response.page);
         setTotalPages(response.total_pages);
@@ -75,34 +98,47 @@ export const usePaginatedMovies = (fetcher: MovieFetcher) => {
             : mergeUniqueById([], response.results),
         );
       } catch (caughtError) {
+        // Remove from pending set
+        pendingRequestsRef.current.delete(controller);
+
         // Don't update state if component unmounted
         if (!mountedRef.current) {
           return;
         }
 
-        // Skip error state if request was cancelled
-        if (caughtError instanceof Error && caughtError.message.includes('aborted')) {
+        // Skip error state if request was cancelled/aborted
+        if (
+          controller.signal.aborted ||
+          (caughtError instanceof Error &&
+            caughtError.message.includes('aborted'))
+        ) {
           console.log('[usePaginatedMovies] Request cancelled');
           return;
         }
-        
-        const message = caughtError instanceof Error ? caughtError.message : 'Unable to fetch movies right now. Please try again.';
+
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : 'Unable to fetch movies right now. Please try again.';
         setError(message);
       } finally {
         if (!mountedRef.current) {
           return;
         }
 
-        loadingRef.current = false;
-        setInitialLoading(false);
-        setRefreshing(false);
-        setLoadingMore(false);
+        // Only clear flags if this same controller is still active
+        if (abortControllerRef.current === controller) {
+          loadingRef.current = false;
+          setInitialLoading(false);
+          setRefreshing(false);
+          setLoadingMore(false);
+        }
       }
     },
     [fetcher],
   );
 
-  const resetAndLoad = useCallback(async () => {    
+  const resetAndLoad = useCallback(async () => {
     fetchedPagesRef.current.clear();
     setPage(0);
     setTotalPages(1);

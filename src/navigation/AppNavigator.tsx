@@ -1,5 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  BackHandler,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeScreen from '../screens/HomeScreen';
 import MovieDetailsScreen from '../screens/MovieDetailsScreen';
@@ -20,14 +33,40 @@ type HomeTabsProps = {
 const HomeTabs = ({ activeTab, onTabPress, openMovie }: HomeTabsProps) => {
   return (
     <View style={styles.container}>
-      <View style={styles.content}>{activeTab === 'popular' ? <HomeScreen onMoviePress={openMovie} /> : <SearchScreen onMoviePress={openMovie} />}</View>
+      <View style={styles.content}>
+        {activeTab === 'popular' ? (
+          <HomeScreen onMoviePress={openMovie} />
+        ) : (
+          <SearchScreen onMoviePress={openMovie} />
+        )}
+      </View>
 
       <View style={styles.tabBar}>
-        <Pressable onPress={() => onTabPress('popular')} style={[styles.tab, activeTab === 'popular' && styles.tabActive]}>
-          <Text style={[styles.tabText, activeTab === 'popular' && styles.tabTextActive]}>Popular</Text>
+        <Pressable
+          onPress={() => onTabPress('popular')}
+          style={[styles.tab, activeTab === 'popular' && styles.tabActive]}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'popular' && styles.tabTextActive,
+            ]}
+          >
+            Popular
+          </Text>
         </Pressable>
-        <Pressable onPress={() => onTabPress('search')} style={[styles.tab, activeTab === 'search' && styles.tabActive]}>
-          <Text style={[styles.tabText, activeTab === 'search' && styles.tabTextActive]}>Search</Text>
+        <Pressable
+          onPress={() => onTabPress('search')}
+          style={[styles.tab, activeTab === 'search' && styles.tabActive]}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'search' && styles.tabTextActive,
+            ]}
+          >
+            Search
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -41,8 +80,25 @@ const AppNavigator = () => {
   const [tabHistory, setTabHistory] = useState<Array<'popular' | 'search'>>([]);
   const [activeTab, setActiveTab] = useState<'popular' | 'search'>('popular');
   const backLockRef = useRef(false);
-  const currentRoute = history[history.length - 1];
+  const historyRef = useRef(history);
+  const tabHistoryRef = useRef(tabHistory);
+  const activeTabRef = useRef(activeTab);
   const networkHandlers: Array<() => void> = [];
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+
+  useEffect(() => {
+    tabHistoryRef.current = tabHistory;
+  }, [tabHistory]);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  const currentRoute = history[history.length - 1];
 
   const releaseBackLock = () => {
     requestAnimationFrame(() => {
@@ -63,17 +119,23 @@ const AppNavigator = () => {
   }, []);
 
   const goBack = useCallback(() => {
-    console.log('[Navigation] goBack called, current route:', currentRoute.name);
+    console.log(
+      '[Navigation] goBack called, current route:',
+      historyRef.current[historyRef.current.length - 1].name,
+    );
     setHistory(current => {
       if (current.length <= 1) {
         console.log('[Navigation] Already at root, cannot go back');
         return current;
       }
       const newHistory = current.slice(0, -1);
-      console.log('[Navigation] Going back to:', newHistory[newHistory.length - 1].name);
+      console.log(
+        '[Navigation] Going back to:',
+        newHistory[newHistory.length - 1].name,
+      );
       return newHistory;
     });
-  }, [currentRoute]);
+  }, []);
 
   const handleTabPress = useCallback((tab: 'popular' | 'search') => {
     console.log('[Navigation] Tab pressed:', tab);
@@ -85,16 +147,24 @@ const AppNavigator = () => {
 
       setTabHistory(existing => {
         const newHistory = [...existing, current];
-        console.log('[Navigation] Pushing previous tab to history:', newHistory);
+        console.log(
+          '[Navigation] Pushing previous tab to history:',
+          newHistory,
+        );
         return newHistory;
       });
       return tab;
     });
   }, []);
 
+  // BackHandler callback with no dependencies - uses refs instead
   const handleHardwareBack = useCallback(() => {
-    console.log('[Navigation] Hardware back pressed, currentRoute:', currentRoute.name);
-    
+    const currentRoute = historyRef.current[historyRef.current.length - 1];
+    console.log(
+      '[Navigation] Hardware back pressed, currentRoute:',
+      currentRoute.name,
+    );
+
     if (backLockRef.current) {
       console.log('[Navigation] Back lock is active, ignoring');
       return true;
@@ -109,8 +179,9 @@ const AppNavigator = () => {
       return true;
     }
 
-    if (tabHistory.length > 0) {
-      const previousTab = tabHistory[tabHistory.length - 1];
+    if (tabHistoryRef.current.length > 0) {
+      const previousTab =
+        tabHistoryRef.current[tabHistoryRef.current.length - 1];
       console.log('[Navigation] Restoring previous tab:', previousTab);
       setTabHistory(current => current.slice(0, -1));
       setActiveTab(previousTab);
@@ -121,10 +192,13 @@ const AppNavigator = () => {
     console.log('[Navigation] Exiting app');
     releaseBackLock();
     return false;
-  }, [currentRoute.name, goBack, tabHistory]);
+  }, [goBack]);
 
   useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', handleHardwareBack);
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      handleHardwareBack,
+    );
     return () => subscription.remove();
   }, [handleHardwareBack]);
 
@@ -133,7 +207,10 @@ const AppNavigator = () => {
   };
 
   const openPostReview = (movieId: number, movieTitle: string) => {
-    setHistory(current => [...current, { name: 'PostReview', movieId, movieTitle }]);
+    setHistory(current => [
+      ...current,
+      { name: 'PostReview', movieId, movieTitle },
+    ]);
   };
 
   const headerTitle = useMemo(() => {
@@ -145,12 +222,14 @@ const AppNavigator = () => {
     }
     return 'Movie Discovery';
   }, [currentRoute.name]);
-  
 
-
-    
   return (
-    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}> 
+    <View
+      style={[
+        styles.root,
+        { paddingTop: insets.top, paddingBottom: insets.bottom },
+      ]}
+    >
       {currentRoute.name !== 'Home' ? (
         <View style={styles.header}>
           <Pressable onPress={goBack} style={styles.backButton}>
@@ -162,29 +241,60 @@ const AppNavigator = () => {
       ) : null}
 
       <View style={styles.content}>
-        {currentRoute.name === 'Home' && <HomeTabs onTabPress={handleTabPress} activeTab={activeTab} openMovie={openMovie} />}
+        {currentRoute.name === 'Home' && (
+          <HomeTabs
+            onTabPress={handleTabPress}
+            activeTab={activeTab}
+            openMovie={openMovie}
+          />
+        )}
 
-        {currentRoute.name === 'MovieDetails' && <MovieDetailsScreen movieId={currentRoute.movieId} onWriteReview={openPostReview} />}
+        {currentRoute.name === 'MovieDetails' && (
+          <MovieDetailsScreen
+            movieId={currentRoute.movieId}
+            onWriteReview={openPostReview}
+          />
+        )}
 
         {currentRoute.name === 'PostReview' && (
-          <UserReviewScreen movieId={currentRoute.movieId} movieTitle={currentRoute.movieTitle} onDone={goBack} />
+          <UserReviewScreen
+            movieId={currentRoute.movieId}
+            movieTitle={currentRoute.movieTitle}
+            onDone={goBack}
+          />
         )}
       </View>
 
-      <NetworkPopover visible={networkVisible} onClose={() => setNetworkVisible(false)} />
+      <NetworkPopover
+        visible={networkVisible}
+        onClose={() => setNetworkVisible(false)}
+      />
     </View>
   );
 };
 
-const NetworkPopover = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => {
+const NetworkPopover = ({
+  visible,
+  onClose,
+}: {
+  visible: boolean;
+  onClose: () => void;
+}) => {
   return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+    <Modal
+      transparent
+      visible={visible}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.modalOverlay}>
         <View style={styles.modalCard}>
           <Text style={styles.modalTitle}>Can&apos;t load data?</Text>
           <Text style={styles.modalText}>
-            If movie data isn&apos;t appearing, your network may be forcing a public DNS (for example dns.google). Try switching your
-            device to your private DNS provider. See the project README for detailed steps.
+            If movie data isn&apos;t appearing, your network may be forcing a
+            public DNS (for example dns.google). Try switching your device to
+            your private DNS provider. See the project README for detailed
+            steps.
           </Text>
           <View style={styles.modalActions}>
             <Pressable onPress={onClose} style={styles.modalButton}>
@@ -299,6 +409,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-
 
 export default AppNavigator;

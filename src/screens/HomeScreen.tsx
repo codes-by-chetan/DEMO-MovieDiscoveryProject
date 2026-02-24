@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect} from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -7,14 +7,14 @@ import {
   View,
 } from 'react-native';
 import MovieCard from '../components/MovieCard';
-import {usePaginatedMovies} from '../hooks/usePaginatedMovies';
+import { usePaginatedMovies } from '../hooks/usePaginatedMovies';
 import { fetchPopularMovies } from '../services/tmdb-service';
 
 type Props = {
   onMoviePress: (movieId: number) => void;
 };
 
-const PopularMoviesScreen = ({onMoviePress}: Props) => {
+const PopularMoviesScreen = ({ onMoviePress }: Props) => {
   const {
     movies,
     error,
@@ -32,7 +32,7 @@ const PopularMoviesScreen = ({onMoviePress}: Props) => {
     return () => {
       console.log('[HomeScreen] Unmounting');
     };
-  }, [resetAndLoad]);
+  }, []);
 
   const onEndReached = useCallback(() => {
     if (!loadingMore && !initialLoading) {
@@ -53,7 +53,9 @@ const PopularMoviesScreen = ({onMoviePress}: Props) => {
       <FlatList
         data={movies}
         keyExtractor={item => item.id.toString()}
-        renderItem={({item}) => <MovieCard movie={item} onPress={onMoviePress} />}
+        renderItem={({ item }) => (
+          <MovieCard movie={item} onPress={onMoviePress} />
+        )}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.6}
         refreshing={refreshing}
@@ -61,9 +63,7 @@ const PopularMoviesScreen = ({onMoviePress}: Props) => {
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={11}
-        ListHeaderComponent={
-          <Text style={styles.header}>Popular movies</Text>
-        }
+        ListHeaderComponent={<Text style={styles.header}>Popular movies</Text>}
         ListFooterComponent={
           loadingMore ? <ActivityIndicator style={styles.footerLoader} /> : null
         }
