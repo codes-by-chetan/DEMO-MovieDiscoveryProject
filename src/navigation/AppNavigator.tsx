@@ -243,6 +243,7 @@ const AppNavigator = () => {
       <View style={styles.content}>
         {currentRoute.name === 'Home' && (
           <HomeTabs
+            key="home-tabs"
             onTabPress={handleTabPress}
             activeTab={activeTab}
             openMovie={openMovie}

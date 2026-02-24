@@ -1,4 +1,10 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -16,9 +22,11 @@ type Props = {
   onMoviePress: (movieId: number) => void;
 };
 
-const SearchMoviesScreen = ({onMoviePress}: Props) => {
+const SearchMoviesScreen = ({ onMoviePress }: Props) => {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query.trim(), 300);
+
+  const isMountedRef = useRef(true);
 
   const fetcher = useMemo(
     () => (page: number) => searchMovies(debouncedQuery, page),
@@ -37,13 +45,24 @@ const SearchMoviesScreen = ({onMoviePress}: Props) => {
   } = usePaginatedMovies(fetcher);
 
   useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!debouncedQuery) {
       return;
     }
     resetAndLoad();
-  }, [debouncedQuery, resetAndLoad]);
+  }, [debouncedQuery]);
 
   const onEndReached = useCallback(() => {
+    // Don't load more if component is unmounted
+    if (!isMountedRef.current) {
+      return;
+    }
     if (!debouncedQuery || loadingMore || initialLoading) {
       return;
     }
@@ -69,7 +88,9 @@ const SearchMoviesScreen = ({onMoviePress}: Props) => {
         <FlatList
           data={movies}
           keyExtractor={item => item.id.toString()}
-          renderItem={({item}) => <MovieCard movie={item} onPress={onMoviePress} />}
+          renderItem={({ item }) => (
+            <MovieCard movie={item} onPress={onMoviePress} />
+          )}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.6}
           refreshing={refreshing}
@@ -77,8 +98,11 @@ const SearchMoviesScreen = ({onMoviePress}: Props) => {
           initialNumToRender={8}
           maxToRenderPerBatch={8}
           windowSize={11}
+          removeClippedSubviews={true}
           ListFooterComponent={
-            loadingMore ? <ActivityIndicator style={styles.footerLoader} /> : null
+            loadingMore ? (
+              <ActivityIndicator style={styles.footerLoader} />
+            ) : null
           }
           ListEmptyComponent={
             !initialLoading ? (
@@ -90,7 +114,9 @@ const SearchMoviesScreen = ({onMoviePress}: Props) => {
         />
       )}
 
-      {initialLoading ? <ActivityIndicator style={styles.searchLoader} /> : null}
+      {initialLoading ? (
+        <ActivityIndicator style={styles.searchLoader} />
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );

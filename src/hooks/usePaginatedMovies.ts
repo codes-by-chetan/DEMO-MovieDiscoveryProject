@@ -35,13 +35,16 @@ export const usePaginatedMovies = (fetcher: MovieFetcher) => {
 
   // Cleanup on unmount - abort ALL pending requests
   useEffect(() => {
+    // Reset mounted flag when component mounts
+    mountedRef.current = true;
+
     return () => {
       mountedRef.current = false;
       // Cancel all pending requests
       pendingRequestsRef.current.forEach(controller => {
         try {
           controller.abort();
-        } catch (e:any) {
+        } catch (e: any) {
           // Silently ignore if already aborted
         }
       });
@@ -49,7 +52,7 @@ export const usePaginatedMovies = (fetcher: MovieFetcher) => {
       if (abortControllerRef.current) {
         try {
           abortControllerRef.current.abort();
-        } catch (e:any) {
+        } catch (e: any) {
           // Silently ignore if already aborted
         }
       }

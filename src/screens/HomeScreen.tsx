@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -26,15 +26,23 @@ const PopularMoviesScreen = ({ onMoviePress }: Props) => {
     resetAndLoad,
   } = usePaginatedMovies(fetchPopularMovies);
 
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
     console.log('[HomeScreen] Mounting, calling resetAndLoad');
+    isMountedRef.current = true;
     resetAndLoad();
     return () => {
       console.log('[HomeScreen] Unmounting');
+      isMountedRef.current = false;
     };
   }, []);
 
   const onEndReached = useCallback(() => {
+    // Don't load more if component is unmounted
+    if (!isMountedRef.current) {
+      return;
+    }
     if (!loadingMore && !initialLoading) {
       loadNext();
     }
@@ -63,6 +71,7 @@ const PopularMoviesScreen = ({ onMoviePress }: Props) => {
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={11}
+        removeClippedSubviews={true}
         ListHeaderComponent={<Text style={styles.header}>Popular movies</Text>}
         ListFooterComponent={
           loadingMore ? <ActivityIndicator style={styles.footerLoader} /> : null

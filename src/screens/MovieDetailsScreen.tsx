@@ -49,6 +49,7 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
   }, []);
 
   useEffect(() => {
+    // Reset mounted flag when this effect runs (movieId changed)
     mountedRef.current = true;
     let mounted = true;
 
