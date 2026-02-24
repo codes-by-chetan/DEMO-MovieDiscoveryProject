@@ -34,11 +34,23 @@ const HomeTabs = ({ activeTab, onTabPress, openMovie }: HomeTabsProps) => {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        {activeTab === 'popular' ? (
+        {/* both screens stay mounted; the inactive tab is simply pushed
+            offscreen with absolute positioning so the active view can fill
+            the parent without the hidden sibling taking up flex space. */}
+        <View
+          style={
+            activeTab === 'popular' ? styles.visible : styles.hidden
+          }
+        >
           <HomeScreen onMoviePress={openMovie} />
-        ) : (
+        </View>
+        <View
+          style={
+            activeTab === 'search' ? styles.visible : styles.hidden
+          }
+        >
           <SearchScreen onMoviePress={openMovie} />
-        )}
+        </View>
       </View>
 
       <View style={styles.tabBar}>
@@ -83,6 +95,7 @@ const AppNavigator = () => {
   const historyRef = useRef(history);
   const tabHistoryRef = useRef(tabHistory);
   const activeTabRef = useRef(activeTab);
+  const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const networkHandlers: Array<() => void> = [];
 
   // Keep refs in sync with state
@@ -118,11 +131,27 @@ const AppNavigator = () => {
     };
   }, []);
 
-  const goBack = useCallback(() => {
-    console.log(
-      '[Navigation] goBack called, current route:',
-      historyRef.current[historyRef.current.length - 1].name,
-    );
+  // helper that actually delays state changes by 100ms. if another
+// navigation request comes in before the timeout fires, we clear the
+// previous one and schedule the new action instead. this ensures React
+// doesn't immediately unmount/mount views during rapid sequences.
+const scheduleNav = (action: () => void) => {
+  if (navigationTimeoutRef.current) {
+    clearTimeout(navigationTimeoutRef.current);
+  }
+  navigationTimeoutRef.current = setTimeout(() => {
+    action();
+    navigationTimeoutRef.current = null;
+  }, 100);
+};
+
+const goBack = useCallback(() => {
+  console.log(
+    '[Navigation] goBack called, current route:',
+    historyRef.current[historyRef.current.length - 1].name,
+  );
+
+  scheduleNav(() => {
     setHistory(current => {
       if (current.length <= 1) {
         console.log('[Navigation] Already at root, cannot go back');
@@ -130,30 +159,33 @@ const AppNavigator = () => {
       }
       const newHistory = current.slice(0, -1);
       console.log(
-        '[Navigation] Going back to:',
+        '[Navigation] Completed navigation back to:',
         newHistory[newHistory.length - 1].name,
       );
       return newHistory;
     });
-  }, []);
+  });
+}, []);
 
   const handleTabPress = useCallback((tab: 'popular' | 'search') => {
     console.log('[Navigation] Tab pressed:', tab);
-    setActiveTab(current => {
-      if (current === tab) {
-        console.log('[Navigation] Already on tab:', tab);
-        return current;
-      }
+    scheduleNav(() => {
+      setActiveTab(current => {
+        if (current === tab) {
+          console.log('[Navigation] Already on tab:', tab);
+          return current;
+        }
 
-      setTabHistory(existing => {
-        const newHistory = [...existing, current];
-        console.log(
-          '[Navigation] Pushing previous tab to history:',
-          newHistory,
-        );
-        return newHistory;
+        setTabHistory(existing => {
+          const newHistory = [...existing, current];
+          console.log(
+            '[Navigation] Pushing previous tab to history:',
+            newHistory,
+          );
+          return newHistory;
+        });
+        return tab;
       });
-      return tab;
     });
   }, []);
 
@@ -199,19 +231,33 @@ const AppNavigator = () => {
       'hardwareBackPress',
       handleHardwareBack,
     );
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+      // Cleanup navigation timeout
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+      }
+    };
   }, [handleHardwareBack]);
 
   const openMovie = (movieId: number) => {
-    setHistory(current => [...current, { name: 'MovieDetails', movieId }]);
+    scheduleNav(() => {
+      setHistory(current => [...current, { name: 'MovieDetails', movieId }]);
+      console.log('[Navigation] Opened movie:', movieId);
+    });
   };
 
+
   const openPostReview = (movieId: number, movieTitle: string) => {
-    setHistory(current => [
-      ...current,
-      { name: 'PostReview', movieId, movieTitle },
-    ]);
+    scheduleNav(() => {
+      setHistory(current => [
+        ...current,
+        { name: 'PostReview', movieId, movieTitle },
+      ]);
+      console.log('[Navigation] Opened review screen for:', movieId);
+    });
   };
+
 
   const headerTitle = useMemo(() => {
     if (currentRoute.name === 'MovieDetails') {
@@ -222,6 +268,14 @@ const AppNavigator = () => {
     }
     return 'Movie Discovery';
   }, [currentRoute.name]);
+
+  // narrow out route-specific data so we can pass props without TS errors
+  const movieIdForDetails =
+    currentRoute.name === 'MovieDetails' ? currentRoute.movieId : undefined;
+  const movieIdForReview =
+    currentRoute.name === 'PostReview' ? currentRoute.movieId : undefined;
+  const movieTitleForReview =
+    currentRoute.name === 'PostReview' ? currentRoute.movieTitle : undefined;
 
   return (
     <View
@@ -241,29 +295,45 @@ const AppNavigator = () => {
       ) : null}
 
       <View style={styles.content}>
-        {currentRoute.name === 'Home' && (
+        {/* keep all three screens mounted; simply stack them and adjust opacity
+            so Fabric never has to destroy/recreate their view states. */}
+        <View
+          style={
+            currentRoute.name === 'Home' ? styles.visible : styles.hidden
+          }
+        >
           <HomeTabs
             key="home-tabs"
             onTabPress={handleTabPress}
             activeTab={activeTab}
             openMovie={openMovie}
           />
-        )}
+        </View>
 
-        {currentRoute.name === 'MovieDetails' && (
+        <View
+          style={
+            currentRoute.name === 'MovieDetails' ? styles.visible : styles.hidden
+          }
+        >
           <MovieDetailsScreen
-            movieId={currentRoute.movieId}
+            key={`movie-${movieIdForDetails ?? 'none'}`}
+            movieId={movieIdForDetails}
             onWriteReview={openPostReview}
           />
-        )}
+        </View>
 
-        {currentRoute.name === 'PostReview' && (
+        <View
+          style={
+            currentRoute.name === 'PostReview' ? styles.visible : styles.hidden
+          }
+        >
           <UserReviewScreen
-            movieId={currentRoute.movieId}
-            movieTitle={currentRoute.movieTitle}
+            key={`review-${movieIdForReview ?? 'none'}`}
+            movieId={movieIdForReview}
+            movieTitle={movieTitleForReview}
             onDone={goBack}
           />
-        )}
+        </View>
       </View>
 
       <NetworkPopover
@@ -316,6 +386,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  screen: {
+    flex: 1,
+  },
+  hiddenScreen: {
+    flex: 1,
+    opacity: 0,
+    pointerEvents: 'none',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -344,6 +422,25 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    position: 'relative',
+  },
+  visible: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 1,
+  },
+  hidden: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    // prevent touches when hidden
+    pointerEvents: 'none',
   },
   tabBar: {
     flexDirection: 'row',

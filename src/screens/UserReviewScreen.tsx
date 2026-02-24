@@ -13,8 +13,8 @@ import {
 import { launchImageLibrary } from 'react-native-image-picker';
 
 type Props = {
-  movieId: number;
-  movieTitle: string;
+  movieId?: number;
+  movieTitle?: string;
   onDone: () => void;
 };
 
@@ -31,6 +31,13 @@ const ProgressBar = ({ progress }: { progress: number }) => {
 
 
 const UserReviewScreen = ({ movieId, movieTitle, onDone: _onDone }: Props) => {
+  // if we don't have the required identifiers we just render nothing;
+  // the navigator keeps the component mounted, so this prevents
+  // accessing undefined values during hidden states.
+  if (movieId == null || movieTitle == null) {
+    return null;
+  }
+
   const [author, setAuthor] = useState('');
   const [review, setReview] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);

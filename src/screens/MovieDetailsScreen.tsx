@@ -17,7 +17,7 @@ import {
 import ReviewItem from '../components/ReviewItem';
 
 type Props = {
-  movieId: number;
+  movieId?: number;
   onWriteReview: (movieId: number, movieTitle: string) => void;
 };
 
@@ -35,23 +35,56 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
   const reviewsAbortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
 
+  // Cleanup on unmount - abort all pending requests
   useEffect(() => {
     return () => {
+      console.log('[MovieDetailsScreen] Component unmounting - aborting requests');
       mountedRef.current = false;
       // Abort any pending requests
-      if (detailsAbortRef.current) {
-        detailsAbortRef.current.abort();
+      try {
+        if (detailsAbortRef.current) {
+          detailsAbortRef.current.abort();
+        }
+      } catch (e) {
+        // Silently ignore if already aborted
       }
-      if (reviewsAbortRef.current) {
-        reviewsAbortRef.current.abort();
+      try {
+        if (reviewsAbortRef.current) {
+          reviewsAbortRef.current.abort();
+        }
+      } catch (e) {
+        // Silently ignore if already aborted
       }
     };
   }, []);
 
+  // Load movie details when movieId changes
   useEffect(() => {
+    if (movieId == null) {
+      // nothing to do when there's no movie selected
+      return;
+    }
+
     // Reset mounted flag when this effect runs (movieId changed)
+    console.log('[MovieDetailsScreen] Loading details for movie:', movieId);
     mountedRef.current = true;
     let mounted = true;
+
+    // Cancel previous requests immediately when movieId changes
+    if (detailsAbortRef.current) {
+      try {
+        detailsAbortRef.current.abort();
+      } catch (e) {
+        // Ignore if already aborted
+      }
+    }
+    if (reviewsAbortRef.current) {
+      try {
+        reviewsAbortRef.current.abort();
+      } catch (e) {
+        // Ignore if already aborted
+      }
+    }
 
     const load = async () => {
       try {
@@ -109,6 +142,11 @@ const MovieDetailsScreen = ({ movieId, onWriteReview }: Props) => {
 
   const loadMoreReviews = useCallback(async () => {
     if (loadingMoreReviews || reviewsPage >= reviewTotalPages) {
+      return;
+    }
+
+    if (movieId == null) {
+      // nothing to load without a movie identifier
       return;
     }
 
