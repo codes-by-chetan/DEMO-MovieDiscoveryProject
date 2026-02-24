@@ -8,3 +8,34 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+# Keep React Native classes
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+
+# Keep all native methods
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# Keep enums
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+# Keep generic signatures
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes SourceFile,LineNumberTable
+-keepattributes LocalVariableTable,LocalVariableTypeTable
+
+# Keep JSON serialization
+-keepclassmembers class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# Keep exception info for debugging
+-keepattributes Exceptions
+
+# Keep line numbers for crash reports
+-renamesourcefileattribute SourceFile
